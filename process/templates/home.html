@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Video Streaming</title>
+</head>
+<body>
+    <h1>Camera Video Streaming</h1>
+    
+    <video id="camera-feed" autoplay playsinline></video>
+    <button id="capture-button">Capture Frame</button>
+    <button id="start-listening-button" >Start Listening</button>
+    {% if textOutput %}
+    <h2>{{textOutput}}</h2>
+    {% else %}
+    <h2 id="update-me">Click the above button to speak...</h2>
+    {% endif %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+    const captureButton = document.getElementById('capture-button');
+    const videoElement = document.getElementById('camera-feed');
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                videoElement.srcObject = stream;
+            } catch (error) {
+                console.error('Error accessing the camera:', error);
+            }
+        }
+        captureButton.addEventListener('click', captureFrame);
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            const dataURL = canvas.toDataURL('image/jpeg');  // Convert frame to base64 data URL
+
+            // Send the captured frame to the server for uploading to Azure Blob Storage
+            uploadFrameToBlobStorage(dataURL);
+        }
+
+        function uploadFrameToBlobStorage(dataURL) {
+        $.ajax({
+            url: "{% url 'uploadFrame' %}", // Replace with your server's endpoint
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ image: dataURL }),
+            success: function () {
+                console.log('Frame uploaded successfully.');
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+                console.error('Error uploading frame:', textStatus, errorThrown);
+            }
+        });
+}
+
+
+        // Call the function to start the camera when the page loads
+        window.addEventListener('DOMContentLoaded', startCamera);
+        function setText(text){
+            document.getElementById("update-me").innerHTML = text;
+            document.getElementById("start-listening-button").disabled = false;
+            document.getElementById("start-listening-button").innerHTML = "Start Listening";
+        }
+
+        $(document).ready(function () {
+            $('#start-listening-button').click(function () {
+                console.log("Listening...");
+                document.getElementById("start-listening-button").innerHTML = "Listening...";
+                document.getElementById("start-listening-button").disabled = true;
+                $.ajax({
+                    url: "{% url 'listenAndRecognize' %}",  // Replace with your URL pattern name
+                    type: "GET",
+                    dataType: "json",
+                    success: function (data) {
+                        console.log('Success:', data);
+                        console.log(data.text);
+                        // Update the text on the page with the data from the server
+                        setText(data.text);
+                    },
+                    error: function (error) {
+                        console.error('Error:', error);
+                    }
+                    
+                });
+                
+             
+            });
+        });
+
+    </script>
+</body>
+</html>
